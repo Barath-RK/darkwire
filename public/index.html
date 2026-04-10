@@ -110,16 +110,6 @@
             transform: translateY(-2px);
         }
 
-        .btn-danger {
-            background: #2a0000;
-            color: #f00;
-            border: 1px solid #f00;
-        }
-
-        .btn-danger:hover {
-            background: #3a0000;
-        }
-
         input {
             width: 100%;
             padding: 12px;
@@ -265,6 +255,12 @@
             font-size: 10px;
             color: #666;
             margin-bottom: 4px;
+        }
+
+        .offline-badge {
+            font-size: 9px;
+            color: #f90;
+            margin-left: 5px;
         }
 
         .encrypted-banner {
@@ -491,21 +487,17 @@
             }
         }
         
-        function saveAllChannels() {
-            localStorage.setItem('darkwire_channels', JSON.stringify(savedChannels));
-        }
-        
         function saveChannel(id, key, name, pin) {
             if (!savedChannels.find(c => c.id === id)) {
                 savedChannels.push({ id, key, name, pin });
-                saveAllChannels();
+                localStorage.setItem('darkwire_channels', JSON.stringify(savedChannels));
                 renderSavedChannels();
             }
         }
         
         function deleteChannel(id) {
             savedChannels = savedChannels.filter(c => c.id !== id);
-            saveAllChannels();
+            localStorage.setItem('darkwire_channels', JSON.stringify(savedChannels));
             renderSavedChannels();
             if (currentChannel === id) exitToMenu();
         }
@@ -592,7 +584,7 @@
         async function joinChannel() {
             const key = document.getElementById('joinKey').value.trim();
             if (key.length !== 16) {
-                document.getElementById('joinError').innerHTML = 'Key must be 16 characters';
+                document.getElementById('joinError').innerHTML = 'Key must be exactly 16 characters';
                 return;
             }
             
@@ -669,18 +661,13 @@
                 document.getElementById('encryptBanner').className = 'encrypted-banner decrypted';
                 if (partnerOnline) disableInput(false);
                 addSystemMessage('🔓 Decryption activated!');
-                refreshAllMessages();
             } else {
                 document.getElementById('pinError').innerHTML = 'Wrong PIN';
             }
         }
         
-        function refreshAllMessages() {
-            // Messages come from server, not from localStorage
-            // This will be populated by socket events
-        }
-        
         function decryptMessage(encrypted) {
+            if (!isDecrypted) return '[🔒 Encrypted - Enter PIN]';
             try {
                 const decoded = atob(encrypted);
                 let result = '';
@@ -709,8 +696,12 @@
             if (!text || !isDecrypted) return;
             
             socket.emit('msg', { id: currentChannel, text: text, userId: currentUserId });
-            displayMessage(text, true, 'text');
+            displayMessage(text, true);
             input.value = '';
+            
+            if (!partnerOnline) {
+                addSystemMessage('📦 Message stored - will deliver when partner comes online');
+            }
         }
         
         function sendFile() {
@@ -741,7 +732,12 @@
                         });
                         
                         displayFileMessage(file.name, fileData, true, fileType);
-                        addSystemMessage('📎 File sent: ' + file.name);
+                        
+                        if (!partnerOnline) {
+                            addSystemMessage('📦 File stored - will deliver when partner comes online');
+                        } else {
+                            addSystemMessage('📎 File sent: ' + file.name);
+                        }
                     };
                     reader.readAsDataURL(file);
                 } else if (file && file.size > 30 * 1024 * 1024) {
@@ -751,7 +747,7 @@
             };
         }
         
-        function displayMessage(text, isOwn, type) {
+        function displayMessage(text, isOwn) {
             const container = document.getElementById('messages');
             const div = document.createElement('div');
             div.className = 'message ' + (isOwn ? 'own' : 'other');
@@ -804,11 +800,8 @@
         }
         
         function exitToMenu() {
-            if (confirm('Exit to menu? Chat will be cleared for both users.')) {
-                socket.emit('clear-chat', { id: currentChannel });
-                setTimeout(() => {
-                    location.reload();
-                }, 500);
+            if (confirm('Exit to menu? Chat will be cleared.')) {
+                location.reload();
             }
         }
         
@@ -832,17 +825,32 @@
             document.getElementById('status').innerHTML = '● Offline';
             document.getElementById('status').className = 'status offline';
             disableInput(true);
-            addSystemMessage('⚠️ Partner disconnected');
+            addSystemMessage('⚠️ Partner went offline. Your messages will be delivered when they return.');
         });
         
         socket.on('msg', (data) => {
             if (data.userId !== currentUserId && isDecrypted) {
                 const decrypted = decryptMessage(data.text);
-                displayMessage(decrypted, false, 'text');
+                displayMessage(decrypted, false);
                 if (document.hidden) {
                     new Notification('DarkWire', { body: 'New message from ' + currentName });
                 }
             }
+        });
+        
+        socket.on('offline-msg', (data) => {
+            if (data.userId !== currentUserId && isDecrypted) {
+                const decrypted = decryptMessage(data.text);
+                displayMessage(decrypted, false);
+                addSystemMessage('📬 Delivered from offline period');
+                if (document.hidden) {
+                    new Notification('DarkWire', { body: 'Offline message from ' + currentName });
+                }
+            }
+        });
+        
+        socket.on('msg-stored', () => {
+            addSystemMessage('📦 Message stored on server - will deliver when partner connects');
         });
         
         socket.on('file', (data) => {
@@ -860,7 +868,7 @@
                     displayFileMessage(data.fileName, data.fileData, false, data.fileType);
                 } else {
                     const decrypted = decryptMessage(data.text);
-                    displayMessage(decrypted, false, 'text');
+                    displayMessage(decrypted, false);
                 }
             }
         });
