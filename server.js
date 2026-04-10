@@ -7,11 +7,13 @@ const cors = require('cors');
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
-  cors: { origin: "*", methods: ["GET", "POST"] }
+  cors: { origin: "*", methods: ["GET", "POST"] },
+  maxHttpBufferSize: 30 * 1024 * 1024 // 30MB limit for Socket.io
 });
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '30mb' }));
+app.use(express.urlencoded({ limit: '30mb', extended: true }));
 app.use(express.static('public'));
 
 // Store channels and messages
@@ -127,7 +129,8 @@ io.on('connection', (socket) => {
       id: Date.now(), 
       userId: userId, 
       text: encrypted, 
-      time: Date.now()
+      time: Date.now(),
+      type: 'text'
     };
     
     ch.messages.push(msgData);
@@ -136,9 +139,39 @@ io.on('connection', (socket) => {
     io.to(id).emit('msg', msgData);
   });
   
+  socket.on('file', (data) => {
+    const { id, userId, fileName, fileData, fileType } = data;
+    const ch = channels.get(id);
+    if (!ch) return;
+    
+    const fileMsgData = {
+      id: Date.now(),
+      userId: userId,
+      type: 'file',
+      fileName: fileName,
+      fileData: fileData,
+      fileType: fileType,
+      time: Date.now()
+    };
+    
+    ch.messages.push(fileMsgData);
+    if (ch.messages.length > 100) ch.messages.shift();
+    
+    io.to(id).emit('file', fileMsgData);
+  });
+  
   socket.on('typing', (data) => {
     const { id, userId, typing } = data;
     socket.to(id).emit('typing', { userId, typing });
+  });
+  
+  socket.on('clear-chat', (data) => {
+    const { id } = data;
+    const ch = channels.get(id);
+    if (ch) {
+      ch.messages = [];
+      io.to(id).emit('chat-cleared');
+    }
   });
   
   socket.on('disconnect', () => {
@@ -169,9 +202,11 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log('');
   console.log('╔════════════════════════════════════════════════╗');
-  console.log('║         DARKWIRE - GLOBAL CHAT READY          ║');
+  console.log('║      DARKWIRE - UPDATED (30MB Files)          ║');
   console.log('╚════════════════════════════════════════════════╝');
   console.log('');
   console.log('  🌐 http://localhost:' + PORT);
+  console.log('  📁 Max file size: 30MB');
+  console.log('  📄 Supported: Images, TXT files');
   console.log('');
 });
