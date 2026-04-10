@@ -8,7 +8,7 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: { origin: "*", methods: ["GET", "POST"] },
-  maxHttpBufferSize: 30 * 1024 * 1024 // 30MB limit for Socket.io
+  maxHttpBufferSize: 30 * 1024 * 1024
 });
 
 app.use(cors());
@@ -16,7 +16,7 @@ app.use(express.json({ limit: '30mb' }));
 app.use(express.urlencoded({ limit: '30mb', extended: true }));
 app.use(express.static('public'));
 
-// Store channels and messages
+// Store channels
 const channels = new Map();
 let currentIP = '127.0.0.1';
 
@@ -39,6 +39,7 @@ function encrypt(text, key) {
   return Buffer.from(result, 'binary').toString('base64');
 }
 
+// API Routes
 app.post('/api/create', (req, res) => {
   const { name } = req.body;
   const id = crypto.randomBytes(8).toString('hex');
@@ -49,9 +50,11 @@ app.post('/api/create', (req, res) => {
     id, name, key, pin,
     users: [],
     messages: [],
+    offlineMessages: [],
     createdAt: Date.now()
   });
   
+  console.log(`Channel created: ${name} with key: ${key}`);
   res.json({ id, key, pin, name });
 });
 
@@ -66,10 +69,22 @@ app.post('/api/join', (req, res) => {
     }
   }
   
-  if (!found) return res.status(404).json({ error: 'Channel not found' });
-  if (found.users.length >= 2) return res.status(403).json({ error: 'Channel full' });
+  if (!found) {
+    console.log(`Join failed: Key ${key} not found`);
+    return res.status(404).json({ error: 'Channel not found' });
+  }
+  if (found.users.length >= 2) {
+    return res.status(403).json({ error: 'Channel full' });
+  }
   
-  res.json({ id: found.id, name: found.name, pin: found.pin, messages: found.messages });
+  console.log(`User joined channel: ${found.name} with key: ${key}`);
+  res.json({ 
+    id: found.id, 
+    name: found.name, 
+    pin: found.pin, 
+    messages: found.messages,
+    offlineMessages: found.offlineMessages 
+  });
 });
 
 app.post('/api/verify', (req, res) => {
@@ -83,6 +98,7 @@ app.post('/api/verify', (req, res) => {
   }
 });
 
+// Socket.IO
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
   let currentChannelId = null;
@@ -91,10 +107,12 @@ io.on('connection', (socket) => {
   socket.on('join', (data) => {
     const { id, userId } = data;
     const ch = channels.get(id);
+    
     if (!ch) {
       socket.emit('error', 'Channel not found');
       return;
     }
+    
     if (ch.users.length >= 2 && !ch.users.includes(userId)) {
       socket.emit('error', 'Channel full');
       return;
@@ -106,17 +124,26 @@ io.on('connection', (socket) => {
     socket.join(id);
     if (!ch.users.includes(userId)) ch.users.push(userId);
     
-    // Send message history
+    // Send all stored messages
     ch.messages.forEach(msg => {
       socket.emit('old-msg', msg);
     });
     
-    // Notify partner
+    // Send offline messages that were stored
+    if (ch.offlineMessages && ch.offlineMessages.length > 0) {
+      console.log(`Sending ${ch.offlineMessages.length} offline messages to ${userId}`);
+      ch.offlineMessages.forEach(msg => {
+        socket.emit('offline-msg', msg);
+      });
+      ch.offlineMessages = [];
+    }
+    
+    // Notify partner that user joined
     if (ch.users.length === 2) {
       io.to(id).emit('partner-joined');
     }
     
-    console.log('User joined channel:', ch.name);
+    console.log(`User ${userId} joined channel: ${ch.name}`);
   });
   
   socket.on('msg', (data) => {
@@ -133,10 +160,23 @@ io.on('connection', (socket) => {
       type: 'text'
     };
     
+    // Store message in history
     ch.messages.push(msgData);
     if (ch.messages.length > 100) ch.messages.shift();
     
-    io.to(id).emit('msg', msgData);
+    // Check if partner is online (channel has 2 users)
+    const partnerOnline = ch.users.length === 2;
+    
+    if (partnerOnline) {
+      // Send immediately if partner online
+      io.to(id).emit('msg', msgData);
+      console.log(`Message sent immediately to ${id}`);
+    } else {
+      // Store for offline delivery
+      ch.offlineMessages.push(msgData);
+      console.log(`Message stored offline for channel ${ch.name}`);
+      socket.emit('msg-stored', { time: Date.now() });
+    }
   });
   
   socket.on('file', (data) => {
@@ -157,7 +197,14 @@ io.on('connection', (socket) => {
     ch.messages.push(fileMsgData);
     if (ch.messages.length > 100) ch.messages.shift();
     
-    io.to(id).emit('file', fileMsgData);
+    const partnerOnline = ch.users.length === 2;
+    
+    if (partnerOnline) {
+      io.to(id).emit('file', fileMsgData);
+    } else {
+      ch.offlineMessages.push(fileMsgData);
+      socket.emit('msg-stored', { time: Date.now() });
+    }
   });
   
   socket.on('typing', (data) => {
@@ -170,6 +217,7 @@ io.on('connection', (socket) => {
     const ch = channels.get(id);
     if (ch) {
       ch.messages = [];
+      ch.offlineMessages = [];
       io.to(id).emit('chat-cleared');
     }
   });
@@ -202,11 +250,11 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log('');
   console.log('╔════════════════════════════════════════════════╗');
-  console.log('║      DARKWIRE - UPDATED (30MB Files)          ║');
+  console.log('║      DARKWIRE - OFFLINE MESSAGING READY       ║');
   console.log('╚════════════════════════════════════════════════╝');
   console.log('');
   console.log('  🌐 http://localhost:' + PORT);
   console.log('  📁 Max file size: 30MB');
-  console.log('  📄 Supported: Images, TXT files');
+  console.log('  💾 Offline messages: Stored & delivered');
   console.log('');
 });
