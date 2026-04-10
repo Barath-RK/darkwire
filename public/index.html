@@ -110,6 +110,16 @@
             transform: translateY(-2px);
         }
 
+        .btn-danger {
+            background: #2a0000;
+            color: #f00;
+            border: 1px solid #f00;
+        }
+
+        .btn-danger:hover {
+            background: #3a0000;
+        }
+
         input {
             width: 100%;
             padding: 12px;
@@ -243,6 +253,7 @@
             border-radius: 12px;
             background: #111;
             border: 1px solid #222;
+            word-break: break-word;
         }
 
         .message.own .bubble {
@@ -336,6 +347,18 @@
             background: #3a0000;
         }
 
+        .file-image {
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .file-link {
+            color: inherit;
+            text-decoration: none;
+        }
+
         @media (max-width: 768px) {
             .screen {
                 padding: 20px;
@@ -346,6 +369,10 @@
             .chat-header {
                 flex-direction: column;
                 align-items: flex-start;
+            }
+            .file-image {
+                max-width: 150px;
+                max-height: 150px;
             }
         }
 
@@ -419,11 +446,14 @@
             <div class="chat-container">
                 <div class="chat-header">
                     <div>
-                        <button class="back-btn" onclick="exitChat()" style="padding: 0; margin: 0; color: #fff;">← BACK TO MENU</button>
+                        <button class="back-btn" onclick="exitToMenu()" style="padding: 0; margin: 0; color: #fff;">← BACK TO MENU</button>
                         <div class="chat-name" id="chatName" style="margin-top: 5px;"></div>
                         <div class="status" id="status">● Offline</div>
                     </div>
-                    <button onclick="deleteCurrentChannel()" style="background:#2a0000; padding:8px 15px; width: auto;">🗑️ DELETE</button>
+                    <div style="display: flex; gap: 10px;">
+                        <button onclick="clearChat()" style="background:#1a1a00; padding:8px 15px; width: auto;">🗑️ CLEAR CHAT</button>
+                        <button onclick="deleteCurrentChannel()" style="background:#2a0000; padding:8px 15px; width: auto;">🗑️ DELETE</button>
+                    </div>
                 </div>
                 
                 <div class="messages" id="messages"></div>
@@ -433,7 +463,7 @@
                 
                 <div class="input-area">
                     <input type="text" id="msgInput" placeholder="Type a message..." disabled>
-                    <input type="file" id="fileInput" style="display:none;">
+                    <input type="file" id="fileInput" accept="image/*,.txt" style="display:none;">
                     <button onclick="sendFile()" id="fileBtn" disabled>📎</button>
                     <button onclick="sendMessage()" id="sendBtn" disabled>→</button>
                 </div>
@@ -461,19 +491,23 @@
             }
         }
         
+        function saveAllChannels() {
+            localStorage.setItem('darkwire_channels', JSON.stringify(savedChannels));
+        }
+        
         function saveChannel(id, key, name, pin) {
             if (!savedChannels.find(c => c.id === id)) {
-                savedChannels.push({ id, key, name, pin, messages: [] });
-                localStorage.setItem('darkwire_channels', JSON.stringify(savedChannels));
+                savedChannels.push({ id, key, name, pin });
+                saveAllChannels();
                 renderSavedChannels();
             }
         }
         
         function deleteChannel(id) {
             savedChannels = savedChannels.filter(c => c.id !== id);
-            localStorage.setItem('darkwire_channels', JSON.stringify(savedChannels));
+            saveAllChannels();
             renderSavedChannels();
-            if (currentChannel === id) exitChat();
+            if (currentChannel === id) exitToMenu();
         }
         
         function renderSavedChannels() {
@@ -642,21 +676,8 @@
         }
         
         function refreshAllMessages() {
-            const channel = savedChannels.find(c => c.id === currentChannel);
-            if (channel && channel.messages) {
-                const container = document.getElementById('messages');
-                container.innerHTML = '';
-                channel.messages.forEach(msg => {
-                    if (msg.isOwn) {
-                        displayMessage(msg.text, true);
-                    } else if (isDecrypted) {
-                        const decrypted = decryptMessage(msg.text);
-                        displayMessage(decrypted, false);
-                    } else {
-                        displayMessage('[🔒 Encrypted - Enter PIN]', false);
-                    }
-                });
-            }
+            // Messages come from server, not from localStorage
+            // This will be populated by socket events
         }
         
         function decryptMessage(encrypted) {
@@ -688,23 +709,8 @@
             if (!text || !isDecrypted) return;
             
             socket.emit('msg', { id: currentChannel, text: text, userId: currentUserId });
-            addMessageToStorage(text, true);
-            displayMessage(text, true);
+            displayMessage(text, true, 'text');
             input.value = '';
-        }
-        
-        function addMessageToStorage(text, isOwn) {
-            const channel = savedChannels.find(c => c.id === currentChannel);
-            if (channel) {
-                if (!channel.messages) channel.messages = [];
-                channel.messages.push({
-                    id: Date.now(),
-                    text: text,
-                    isOwn: isOwn,
-                    timestamp: Date.now()
-                });
-                localStorage.setItem('darkwire_channels', JSON.stringify(savedChannels));
-            }
         }
         
         function sendFile() {
@@ -712,25 +718,63 @@
             fileInput.click();
             fileInput.onchange = function() {
                 const file = fileInput.files[0];
-                if (file && file.size <= 5 * 1024 * 1024 && isDecrypted) {
+                const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'text/plain'];
+                
+                if (!allowedTypes.includes(file.type)) {
+                    alert('Only image files (JPEG, PNG, GIF, WEBP) and TXT files are allowed!');
+                    fileInput.value = '';
+                    return;
+                }
+                
+                if (file && file.size <= 30 * 1024 * 1024 && isDecrypted) {
                     const reader = new FileReader();
                     reader.onload = function(e) {
+                        const fileData = e.target.result;
+                        const fileType = file.type.startsWith('image/') ? 'image' : 'text';
+                        
+                        socket.emit('file', {
+                            id: currentChannel,
+                            userId: currentUserId,
+                            fileName: file.name,
+                            fileData: fileData,
+                            fileType: fileType
+                        });
+                        
+                        displayFileMessage(file.name, fileData, true, fileType);
                         addSystemMessage('📎 File sent: ' + file.name);
                     };
                     reader.readAsDataURL(file);
-                } else if (file && file.size > 5 * 1024 * 1024) {
-                    alert('File too large! Max 5MB');
+                } else if (file && file.size > 30 * 1024 * 1024) {
+                    alert('File too large! Maximum 30MB');
                 }
                 fileInput.value = '';
             };
         }
         
-        function displayMessage(text, isOwn) {
+        function displayMessage(text, isOwn, type) {
             const container = document.getElementById('messages');
             const div = document.createElement('div');
             div.className = 'message ' + (isOwn ? 'own' : 'other');
             const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             div.innerHTML = `<div class="meta">${isOwn ? 'You' : 'Partner'} • ${time}</div><div class="bubble">${escapeHtml(text)}</div>`;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        function displayFileMessage(fileName, fileData, isOwn, fileType) {
+            const container = document.getElementById('messages');
+            const div = document.createElement('div');
+            div.className = 'message ' + (isOwn ? 'own' : 'other');
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
+            let content = '';
+            if (fileType === 'image') {
+                content = `<img src="${fileData}" class="file-image" alt="${fileName}" onclick="window.open('${fileData}')">`;
+            } else {
+                content = `<a href="${fileData}" download="${fileName}" class="file-link" style="color:${isOwn ? '#000' : '#fff'};">📄 ${fileName}</a>`;
+            }
+            
+            div.innerHTML = `<div class="meta">${isOwn ? 'You' : 'Partner'} • ${time}</div><div class="bubble">${content}</div>`;
             container.appendChild(div);
             container.scrollTop = container.scrollHeight;
         }
@@ -744,21 +788,34 @@
             container.scrollTop = container.scrollHeight;
         }
         
+        function clearChat() {
+            if (confirm('Clear all messages in this chat? This will clear for both users.')) {
+                socket.emit('clear-chat', { id: currentChannel });
+                document.getElementById('messages').innerHTML = '';
+                addSystemMessage('🗑️ Chat has been cleared');
+            }
+        }
+        
+        function deleteCurrentChannel() {
+            if (confirm('Delete this channel? All messages will be lost.')) {
+                deleteChannel(currentChannel);
+                exitToMenu();
+            }
+        }
+        
+        function exitToMenu() {
+            if (confirm('Exit to menu? Chat will be cleared for both users.')) {
+                socket.emit('clear-chat', { id: currentChannel });
+                setTimeout(() => {
+                    location.reload();
+                }, 500);
+            }
+        }
+        
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
-        }
-        
-        function deleteCurrentChannel() {
-            if (confirm('Delete this channel?')) {
-                deleteChannel(currentChannel);
-                exitChat();
-            }
-        }
-        
-        function exitChat() {
-            if (confirm('Exit chat?')) location.reload();
         }
         
         // Socket events
@@ -779,25 +836,38 @@
         });
         
         socket.on('msg', (data) => {
-            if (data.userId !== currentUserId) {
-                if (isDecrypted) {
-                    const decrypted = decryptMessage(data.text);
-                    displayMessage(decrypted, false);
-                    addMessageToStorage(decrypted, false);
-                } else {
-                    displayMessage('[🔒 Encrypted - Enter PIN]', false);
-                }
+            if (data.userId !== currentUserId && isDecrypted) {
+                const decrypted = decryptMessage(data.text);
+                displayMessage(decrypted, false, 'text');
                 if (document.hidden) {
                     new Notification('DarkWire', { body: 'New message from ' + currentName });
                 }
             }
         });
         
+        socket.on('file', (data) => {
+            if (data.userId !== currentUserId && isDecrypted) {
+                displayFileMessage(data.fileName, data.fileData, false, data.fileType);
+                if (document.hidden) {
+                    new Notification('DarkWire', { body: 'File received: ' + data.fileName });
+                }
+            }
+        });
+        
         socket.on('old-msg', (data) => {
             if (data.userId !== currentUserId && isDecrypted) {
-                const decrypted = decryptMessage(data.text);
-                displayMessage(decrypted, false);
+                if (data.type === 'file') {
+                    displayFileMessage(data.fileName, data.fileData, false, data.fileType);
+                } else {
+                    const decrypted = decryptMessage(data.text);
+                    displayMessage(decrypted, false, 'text');
+                }
             }
+        });
+        
+        socket.on('chat-cleared', () => {
+            document.getElementById('messages').innerHTML = '';
+            addSystemMessage('🗑️ Chat has been cleared by partner');
         });
         
         socket.on('typing', (data) => {
