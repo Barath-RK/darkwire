@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>DarkWire - Global Secure Chat</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #000;
+            color: #fff;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .header {
+            background: #0a0a0a;
+            padding: 15px 20px;
+            border-bottom: 1px solid #222;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 20px;
+            font-weight: bold;
+            letter-spacing: 2px;
+        }
+
+        .ip {
+            font-family: monospace;
+            font-size: 12px;
+            color: #0f0;
+            background: #111;
+            padding: 5px 10px;
+            border-radius: 20px;
+        }
+
+        .main {
+            height: calc(100vh - 60px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .screen {
+            max-width: 500px;
+            width: 100%;
+            background: #0a0a0a;
+            border: 1px solid #222;
+            border-radius: 20px;
+            padding: 30px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        p {
+            color: #888;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #fff;
+            color: #000;
+        }
+
+        .btn-primary:hover {
+            background: #ddd;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: #111;
+            color: #fff;
+            border: 1px solid #333;
+        }
+
+        .btn-secondary:hover {
+            background: #1a1a1a;
+            transform: translateY(-2px);
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 14px;
+            font-family: monospace;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #fff;
+        }
+
+        .key-box {
+            background: #111;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            margin: 15px 0;
+            word-break: break-all;
+            font-family: monospace;
+            font-size: 14px;
+            border: 1px solid #00ff41;
+        }
+
+        .pin-box {
+            background: #1a1a1a;
+            padding: 10px;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 28px;
+            letter-spacing: 5px;
+            font-family: monospace;
+            color: #0f0;
+            margin: 15px 0;
+        }
+
+        .error {
+            color: #f00;
+            font-size: 12px;
+            text-align: center;
+            margin-top: 10px;
+        }
+
+        .back-btn {
+            background: transparent;
+            border: none;
+            color: #888;
+            font-size: 14px;
+            text-align: left;
+            padding: 0 0 15px 0;
+            margin: 0;
+            width: auto;
+        }
+
+        .back-btn:hover {
+            color: #fff;
+            background: transparent;
+        }
+
+        .chat-container {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            background: #000;
+        }
+
+        .chat-header {
+            background: #0a0a0a;
+            padding: 15px;
+            border-bottom: 1px solid #222;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .chat-name {
+            font-weight: bold;
+            font-size: 16px;
+            color: #fff;
+        }
+
+        .status {
+            font-size: 12px;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        .status.online {
+            color: #0f0;
+        }
+
+        .status.offline {
+            color: #f90;
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+
+        .message {
+            margin-bottom: 10px;
+            max-width: 70%;
+            clear: both;
+            animation: fadeIn 0.2s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.own {
+            float: right;
+        }
+
+        .message.other {
+            float: left;
+        }
+
+        .bubble {
+            padding: 8px 12px;
+            border-radius: 12px;
+            background: #111;
+            border: 1px solid #222;
+        }
+
+        .message.own .bubble {
+            background: #fff;
+            color: #000;
+        }
+
+        .meta {
+            font-size: 10px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+
+        .encrypted-banner {
+            background: #1a0000;
+            padding: 8px;
+            text-align: center;
+            font-size: 12px;
+            color: #f00;
+            border-top: 1px solid #f00;
+            border-bottom: 1px solid #f00;
+        }
+
+        .encrypted-banner.decrypted {
+            background: #001a00;
+            color: #0f0;
+            border-color: #0f0;
+        }
+
+        .input-area {
+            padding: 15px;
+            background: #0a0a0a;
+            border-top: 1px solid #222;
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-area input {
+            flex: 1;
+            margin: 0;
+        }
+
+        .input-area button {
+            width: auto;
+            padding: 12px 20px;
+            margin: 0;
+        }
+
+        .typing {
+            padding: 5px 15px;
+            font-size: 12px;
+            color: #666;
+            font-style: italic;
+        }
+
+        .saved-item {
+            background: #111;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 8px;
+            cursor: pointer;
+            border: 1px solid #222;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.2s;
+        }
+
+        .saved-item:hover {
+            border-color: #fff;
+            transform: translateX(5px);
+        }
+
+        .saved-name {
+            flex: 1;
+        }
+
+        .delete-channel {
+            background: #2a0000;
+            color: #f00;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            width: auto;
+            margin: 0;
+        }
+
+        .delete-channel:hover {
+            background: #3a0000;
+        }
+
+        @media (max-width: 768px) {
+            .screen {
+                padding: 20px;
+            }
+            .message {
+                max-width: 85%;
+            }
+            .chat-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #0a0a0a;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">⚡ DARKWIRE</div>
+        <div class="ip" id="ip">127.0.0.1</div>
+    </div>
+    
+    <div class="main">
+        <div id="menuScreen" class="screen">
+            <h1>🔒 Global Secure Chat</h1>
+            <p>Create a private channel or join existing</p>
+            <button class="btn-primary" onclick="showCreate()">✨ CREATE QUANTUM CHANNEL</button>
+            <button class="btn-secondary" onclick="showJoin()">🔗 ACCESS DARK LINK</button>
+            <div style="margin-top: 30px;">
+                <div style="font-size: 12px; color: #444; text-align: center; margin-bottom: 10px;">YOUR SAVED CHANNELS</div>
+                <div id="savedList"></div>
+            </div>
+        </div>
+        
+        <div id="createScreen" class="screen hidden">
+            <button class="back-btn" onclick="showMenu()">← BACK</button>
+            <h1>✨ Create Channel</h1>
+            <input type="text" id="channelName" placeholder="Channel name (e.g., Work, Family, Secret)" maxlength="30">
+            <button class="btn-primary" onclick="createChannel()">CREATE CHANNEL →</button>
+            <div id="createResult" style="display:none;">
+                <div style="margin-top: 20px;">
+                    <div style="font-size: 12px; color:#888;">YOUR SECRET KEY (16 CHARS)</div>
+                    <div class="key-box" id="keyDisplay"></div>
+                    <div style="font-size: 12px; color:#888;">DECRYPTION PIN (LAST 4 DIGITS)</div>
+                    <div class="pin-box" id="pinDisplay"></div>
+                    <button class="btn-secondary" onclick="copyKey()">📋 COPY KEY & PIN</button>
+                    <button class="btn-primary" onclick="enterChat()">ENTER CHAT →</button>
+                </div>
+            </div>
+        </div>
+        
+        <div id="joinScreen" class="screen hidden">
+            <button class="back-btn" onclick="showMenu()">← BACK</button>
+            <h1>🔗 Join Channel</h1>
+            <input type="text" id="joinKey" placeholder="Enter 16-character secret key" maxlength="16">
+            <button class="btn-primary" onclick="joinChannel()">JOIN CHANNEL →</button>
+            <div id="joinError" class="error"></div>
+        </div>
+        
+        <div id="pinScreen" class="screen hidden">
+            <button class="back-btn" onclick="showMenu()">← BACK</button>
+            <h1>🔐 Enter PIN</h1>
+            <p>Messages are encrypted. Enter the 4-digit PIN to decrypt all messages.</p>
+            <input type="password" id="pinInput" placeholder="Enter 4-digit PIN" maxlength="4" pattern="[0-9]{4}">
+            <button class="btn-primary" onclick="verifyPin()">VERIFY PIN →</button>
+            <div id="pinError" class="error"></div>
+        </div>
+        
+        <div id="chatScreen" class="screen hidden" style="max-width: 100%; height: 100%; padding: 0; background: transparent; border: none;">
+            <div class="chat-container">
+                <div class="chat-header">
+                    <div>
+                        <button class="back-btn" onclick="exitChat()" style="padding: 0; margin: 0; color: #fff;">← BACK TO MENU</button>
+                        <div class="chat-name" id="chatName" style="margin-top: 5px;"></div>
+                        <div class="status" id="status">● Offline</div>
+                    </div>
+                    <button onclick="deleteCurrentChannel()" style="background:#2a0000; padding:8px 15px; width: auto;">🗑️ DELETE</button>
+                </div>
+                
+                <div class="messages" id="messages"></div>
+                
+                <div class="encrypted-banner" id="encryptBanner">🔒 ENCRYPTED - Enter PIN to decrypt</div>
+                <div class="typing" id="typingIndicator"></div>
+                
+                <div class="input-area">
+                    <input type="text" id="msgInput" placeholder="Type a message..." disabled>
+                    <input type="file" id="fileInput" style="display:none;">
+                    <button onclick="sendFile()" id="fileBtn" disabled>📎</button>
+                    <button onclick="sendMessage()" id="sendBtn" disabled>→</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        let currentChannel = null;
+        let currentKey = null;
+        let currentPin = null;
+        let currentName = null;
+        let currentUserId = 'user_' + Math.random().toString(36).substr(2, 8);
+        let isDecrypted = false;
+        let partnerOnline = false;
+        let savedChannels = [];
+        
+        function loadSavedChannels() {
+            const saved = localStorage.getItem('darkwire_channels');
+            if (saved) {
+                savedChannels = JSON.parse(saved);
+                renderSavedChannels();
+            }
+        }
+        
+        function saveChannel(id, key, name, pin) {
+            if (!savedChannels.find(c => c.id === id)) {
+                savedChannels.push({ id, key, name, pin, messages: [] });
+                localStorage.setItem('darkwire_channels', JSON.stringify(savedChannels));
+                renderSavedChannels();
+            }
+        }
+        
+        function deleteChannel(id) {
+            savedChannels = savedChannels.filter(c => c.id !== id);
+            localStorage.setItem('darkwire_channels', JSON.stringify(savedChannels));
+            renderSavedChannels();
+            if (currentChannel === id) exitChat();
+        }
+        
+        function renderSavedChannels() {
+            const container = document.getElementById('savedList');
+            if (!container) return;
+            if (savedChannels.length === 0) {
+                container.innerHTML = '<div style="color:#333; text-align:center; font-size:12px;">No saved channels</div>';
+                return;
+            }
+            container.innerHTML = savedChannels.map(c => `
+                <div class="saved-item">
+                    <div class="saved-name" onclick="rejoinChannel('${c.id}', '${c.key}', '${c.name}', '${c.pin}')">
+                        <div style="font-weight:bold;">${escapeHtml(c.name)}</div>
+                        <div style="font-size:10px; color:#666;">Key: ${c.key}</div>
+                    </div>
+                    <button class="delete-channel" onclick="event.stopPropagation(); deleteChannel('${c.id}')">🗑️</button>
+                </div>
+            `).join('');
+        }
+        
+        function rejoinChannel(id, key, name, pin) {
+            currentChannel = id;
+            currentKey = key;
+            currentName = name;
+            currentPin = pin;
+            startChat();
+        }
+        
+        function showMenu() {
+            document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+            document.getElementById('menuScreen').classList.remove('hidden');
+            loadSavedChannels();
+        }
+        
+        function showCreate() {
+            document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+            document.getElementById('createScreen').classList.remove('hidden');
+            document.getElementById('createResult').style.display = 'none';
+            document.getElementById('channelName').value = '';
+        }
+        
+        function showJoin() {
+            document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+            document.getElementById('joinScreen').classList.remove('hidden');
+            document.getElementById('joinError').innerHTML = '';
+            document.getElementById('joinKey').value = '';
+        }
+        
+        async function createChannel() {
+            const name = document.getElementById('channelName').value.trim();
+            if (!name) {
+                alert('Enter channel name');
+                return;
+            }
+            
+            const res = await fetch('/api/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name })
+            });
+            const data = await res.json();
+            
+            currentChannel = data.id;
+            currentKey = data.key;
+            currentPin = data.pin;
+            currentName = data.name;
+            
+            document.getElementById('keyDisplay').innerHTML = currentKey;
+            document.getElementById('pinDisplay').innerHTML = currentPin;
+            document.getElementById('createResult').style.display = 'block';
+            
+            saveChannel(currentChannel, currentKey, currentName, currentPin);
+        }
+        
+        function copyKey() {
+            navigator.clipboard.writeText('Key: ' + currentKey + '\nPIN: ' + currentPin);
+            alert('✓ Key and PIN copied!');
+        }
+        
+        function enterChat() { startChat(); }
+        
+        async function joinChannel() {
+            const key = document.getElementById('joinKey').value.trim();
+            if (key.length !== 16) {
+                document.getElementById('joinError').innerHTML = 'Key must be 16 characters';
+                return;
+            }
+            
+            const res = await fetch('/api/join', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: key })
+            });
+            
+            if (res.ok) {
+                const data = await res.json();
+                currentChannel = data.id;
+                currentKey = key;
+                currentPin = data.pin;
+                currentName = data.name;
+                saveChannel(currentChannel, currentKey, currentName, currentPin);
+                startChat();
+            } else {
+                const err = await res.json();
+                document.getElementById('joinError').innerHTML = err.error;
+            }
+        }
+        
+        function startChat() {
+            socket.emit('join', { id: currentChannel, userId: currentUserId });
+            
+            document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+            document.getElementById('chatScreen').classList.remove('hidden');
+            document.getElementById('chatName').innerHTML = currentName;
+            document.getElementById('status').innerHTML = '● Waiting for partner...';
+            document.getElementById('status').className = 'status offline';
+            document.getElementById('encryptBanner').className = 'encrypted-banner';
+            document.getElementById('encryptBanner').innerHTML = '🔒 ENCRYPTED - Enter PIN to decrypt';
+            
+            document.getElementById('messages').innerHTML = '';
+            isDecrypted = false;
+            partnerOnline = false;
+            
+            disableInput(true);
+            
+            setTimeout(() => {
+                if (!isDecrypted) {
+                    document.getElementById('chatScreen').classList.add('hidden');
+                    document.getElementById('pinScreen').classList.remove('hidden');
+                    document.getElementById('pinError').innerHTML = '';
+                    document.getElementById('pinInput').value = '';
+                }
+            }, 100);
+        }
+        
+        async function verifyPin() {
+            const pin = document.getElementById('pinInput').value.trim();
+            if (pin.length !== 4 || !/^\d+$/.test(pin)) {
+                document.getElementById('pinError').innerHTML = 'PIN must be 4 digits';
+                return;
+            }
+            
+            if (pin !== currentPin) {
+                document.getElementById('pinError').innerHTML = '❌ Invalid PIN';
+                return;
+            }
+            
+            const res = await fetch('/api/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: currentChannel, pin: pin })
+            });
+            
+            if (res.ok) {
+                isDecrypted = true;
+                document.getElementById('pinScreen').classList.add('hidden');
+                document.getElementById('chatScreen').classList.remove('hidden');
+                document.getElementById('encryptBanner').innerHTML = '🔓 DECRYPTED - Messages visible';
+                document.getElementById('encryptBanner').className = 'encrypted-banner decrypted';
+                if (partnerOnline) disableInput(false);
+                addSystemMessage('🔓 Decryption activated!');
+                refreshAllMessages();
+            } else {
+                document.getElementById('pinError').innerHTML = 'Wrong PIN';
+            }
+        }
+        
+        function refreshAllMessages() {
+            const channel = savedChannels.find(c => c.id === currentChannel);
+            if (channel && channel.messages) {
+                const container = document.getElementById('messages');
+                container.innerHTML = '';
+                channel.messages.forEach(msg => {
+                    if (msg.isOwn) {
+                        displayMessage(msg.text, true);
+                    } else if (isDecrypted) {
+                        const decrypted = decryptMessage(msg.text);
+                        displayMessage(decrypted, false);
+                    } else {
+                        displayMessage('[🔒 Encrypted - Enter PIN]', false);
+                    }
+                });
+            }
+        }
+        
+        function decryptMessage(encrypted) {
+            try {
+                const decoded = atob(encrypted);
+                let result = '';
+                for (let i = 0; i < decoded.length; i++) {
+                    result += String.fromCharCode(decoded.charCodeAt(i) ^ currentKey.charCodeAt(i % currentKey.length));
+                }
+                return result;
+            } catch(e) {
+                return '[Decryption failed]';
+            }
+        }
+        
+        function disableInput(disabled) {
+            const msgInput = document.getElementById('msgInput');
+            const sendBtn = document.getElementById('sendBtn');
+            const fileBtn = document.getElementById('fileBtn');
+            msgInput.disabled = disabled;
+            sendBtn.disabled = disabled;
+            fileBtn.disabled = disabled;
+            if (!disabled) msgInput.focus();
+        }
+        
+        function sendMessage() {
+            const input = document.getElementById('msgInput');
+            const text = input.value.trim();
+            if (!text || !isDecrypted) return;
+            
+            socket.emit('msg', { id: currentChannel, text: text, userId: currentUserId });
+            addMessageToStorage(text, true);
+            displayMessage(text, true);
+            input.value = '';
+        }
+        
+        function addMessageToStorage(text, isOwn) {
+            const channel = savedChannels.find(c => c.id === currentChannel);
+            if (channel) {
+                if (!channel.messages) channel.messages = [];
+                channel.messages.push({
+                    id: Date.now(),
+                    text: text,
+                    isOwn: isOwn,
+                    timestamp: Date.now()
+                });
+                localStorage.setItem('darkwire_channels', JSON.stringify(savedChannels));
+            }
+        }
+        
+        function sendFile() {
+            const fileInput = document.getElementById('fileInput');
+            fileInput.click();
+            fileInput.onchange = function() {
+                const file = fileInput.files[0];
+                if (file && file.size <= 5 * 1024 * 1024 && isDecrypted) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        addSystemMessage('📎 File sent: ' + file.name);
+                    };
+                    reader.readAsDataURL(file);
+                } else if (file && file.size > 5 * 1024 * 1024) {
+                    alert('File too large! Max 5MB');
+                }
+                fileInput.value = '';
+            };
+        }
+        
+        function displayMessage(text, isOwn) {
+            const container = document.getElementById('messages');
+            const div = document.createElement('div');
+            div.className = 'message ' + (isOwn ? 'own' : 'other');
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            div.innerHTML = `<div class="meta">${isOwn ? 'You' : 'Partner'} • ${time}</div><div class="bubble">${escapeHtml(text)}</div>`;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        function addSystemMessage(text) {
+            const container = document.getElementById('messages');
+            const div = document.createElement('div');
+            div.className = 'message other';
+            div.innerHTML = `<div class="bubble" style="background:#1a1a1a; color:#888; font-style:italic;">${escapeHtml(text)}</div>`;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function deleteCurrentChannel() {
+            if (confirm('Delete this channel?')) {
+                deleteChannel(currentChannel);
+                exitChat();
+            }
+        }
+        
+        function exitChat() {
+            if (confirm('Exit chat?')) location.reload();
+        }
+        
+        // Socket events
+        socket.on('partner-joined', () => {
+            partnerOnline = true;
+            document.getElementById('status').innerHTML = '● Online';
+            document.getElementById('status').className = 'status online';
+            if (isDecrypted) disableInput(false);
+            addSystemMessage('🔌 Partner connected!');
+        });
+        
+        socket.on('partner-left', () => {
+            partnerOnline = false;
+            document.getElementById('status').innerHTML = '● Offline';
+            document.getElementById('status').className = 'status offline';
+            disableInput(true);
+            addSystemMessage('⚠️ Partner disconnected');
+        });
+        
+        socket.on('msg', (data) => {
+            if (data.userId !== currentUserId) {
+                if (isDecrypted) {
+                    const decrypted = decryptMessage(data.text);
+                    displayMessage(decrypted, false);
+                    addMessageToStorage(decrypted, false);
+                } else {
+                    displayMessage('[🔒 Encrypted - Enter PIN]', false);
+                }
+                if (document.hidden) {
+                    new Notification('DarkWire', { body: 'New message from ' + currentName });
+                }
+            }
+        });
+        
+        socket.on('old-msg', (data) => {
+            if (data.userId !== currentUserId && isDecrypted) {
+                const decrypted = decryptMessage(data.text);
+                displayMessage(decrypted, false);
+            }
+        });
+        
+        socket.on('typing', (data) => {
+            const indicator = document.getElementById('typingIndicator');
+            if (data.typing && data.userId !== currentUserId && partnerOnline) {
+                indicator.innerHTML = 'Partner is typing...';
+                setTimeout(() => indicator.innerHTML = '', 2000);
+            }
+        });
+        
+        socket.on('ip', (ip) => {
+            document.getElementById('ip').innerHTML = ip;
+        });
+        
+        let typingTimeout;
+        document.getElementById('msgInput').addEventListener('input', () => {
+            if (partnerOnline && isDecrypted) {
+                socket.emit('typing', { id: currentChannel, userId: currentUserId, typing: true });
+                clearTimeout(typingTimeout);
+                typingTimeout = setTimeout(() => {
+                    socket.emit('typing', { id: currentChannel, userId: currentUserId, typing: false });
+                }, 1000);
+            }
+        });
+        
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+        
+        loadSavedChannels();
+    </script>
+</body>
+</html>
