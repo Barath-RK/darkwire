@@ -1,7 +1,7 @@
 {
   "name": "darkwire",
   "version": "1.0.0",
-  "description": "Global secure encrypted chat",
+  "description": "Global secure encrypted chat with offline messaging",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
