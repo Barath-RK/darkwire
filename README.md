@@ -6,7 +6,7 @@
 
 **DarkWire** is a secure, encrypted, real-time messaging application with end-to-end encryption, offline messaging support, and file sharing capabilities.
 
-🔒 **Live Demo:** https://darkwire-3xl0.onrender.com
+🔒 **Live Demo:** https://darkwire-gq59.onrender.com/
 
 ---
 
